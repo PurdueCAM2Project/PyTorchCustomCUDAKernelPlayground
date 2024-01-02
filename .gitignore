@@ -1,0 +1,5 @@
+*.pyd
+
+.egg-info/*
+build/*
+.vscode/*
