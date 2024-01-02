@@ -62,9 +62,7 @@ void gorby_vector_add_1d_inplace_cpu_kernel(
     }
 }
 
-// Params 
-// length : src
-// return # threads per dim
+// Helper function for CUDA kernel - choose # threads per block based on size of tensor
 unsigned int __inline__ get_threads_per_block_from_tensor_dim(torch::Tensor x, int dim){
     unsigned int threads_per_block;
     const auto tensor_size_along_dim = x.size(dim);
@@ -89,7 +87,7 @@ unsigned int __inline__ get_threads_per_block_from_tensor_dim(torch::Tensor x, i
     else if(tensor_size_along_dim <= 1024){
         threads_per_block = 1024;
     }
-    // Max threads per block is 1024 for most NVIDIA GPU architectures
+    // Max threads per block is 1024 for most NVIDIA GPU architectures - see CUDA programming guide
     // Lets use 1024 for the maximum size if our length is > 1024 - we will just dispatch more thread blocks then
     else{
         threads_per_block = 1024;
@@ -98,7 +96,9 @@ unsigned int __inline__ get_threads_per_block_from_tensor_dim(torch::Tensor x, i
     return threads_per_block;
 }
 
-// CUDA Binding
+// This function does the heavy lifting
+// Depending on the device type, we invoke a CUDA kernel or a simple C++ implementation for CPU tensors
+// Note, we can beautify this and make it simpler by registering our functions with the PyTorch dispatcher (TODO)
 torch::Tensor _gorby_vector_add_1d_inplace(
     torch::Tensor x,
     torch::Tensor y
@@ -141,9 +141,8 @@ torch::Tensor _gorby_vector_add_1d_inplace(
     return x;
 }
 
-// Params
-// x : src/dest
-// y : src
+// This is the function we will bind to Python 
+// Here we call the helper function with a similar name to do the heavy lifting, but first do some input validation
 torch::Tensor gorby_vector_add_1d_inplace(
     torch::Tensor x,
     torch::Tensor y
