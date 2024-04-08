@@ -1,8 +1,8 @@
 import torch
 import argparse
 
-from cpp.gorby_nvtx import nvtx_init
-from cpp.gorby_vector_add import vector_add_1d_inplace
+from ops.gorby_nvtx import nvtx_init
+from ops.gorby_vector_add import vector_add_1d_inplace
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

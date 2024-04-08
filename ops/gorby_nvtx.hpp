@@ -10,8 +10,7 @@ namespace gorby{
         void nvtx_range_pop(void);
 
         // PyBind!
-        PYBIND11_MODULE(TORCH_EXTENSION_NAME, m)
-        {
+        PYBIND11_MODULE(TORCH_EXTENSION_NAME, m){
             m.def("nvtx_init", &nvtx_init, "Initialize NVTX marker");
             m.def("nvtx_mark", &nvtx_mark, "Add NVTX marker");
             m.def("nvtx_range_push", &nvtx_range_push, "Start / Push NVTX Named Range");

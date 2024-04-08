@@ -10,33 +10,27 @@ namespace gorby{
         // Put in anonymous namespace to not pollute anything - not sure if this would be a problem, but it seems proper
         namespace
         {
-            void __inline__ CHECK_CUDA(const torch::Tensor &x)
-            {
+            void __inline__ CHECK_CUDA(const torch::Tensor &x){
                 TORCH_CHECK(x.device().is_cuda(), x, " must be a CUDA tensor");
             }
 
-            void __inline__ CHECK_CONTIGUOUS(const torch::Tensor &x)
-            {
+            void __inline__ CHECK_CONTIGUOUS(const torch::Tensor &x){
                 TORCH_CHECK(x.is_contiguous(), x, " must be contiguous");
             }
 
-            void __inline__ CHECK_LENGTH_ALONG_DIM_NONZERO(const torch::Tensor &x, const torch::Tensor &y, int dim)
-            {
+            void __inline__ CHECK_LENGTH_ALONG_DIM_NONZERO(const torch::Tensor &x, const torch::Tensor &y, int dim){
                 TORCH_CHECK(x.size(dim) == y.size(dim), x, " and ", y, " must have same size along dim ", dim);
             }
 
-            void __inline__ CHECK_SAME_TYPE(const torch::Tensor &x, const torch::Tensor &y)
-            {
+            void __inline__ CHECK_SAME_TYPE(const torch::Tensor &x, const torch::Tensor &y){
                 TORCH_CHECK(x.dtype() == y.dtype(), x, " must have same type as ", y);
             }
 
-            void __inline__ CHECK_SAME_DEVICE(const torch::Tensor &x, const torch::Tensor &y)
-            {
+            void __inline__ CHECK_SAME_DEVICE(const torch::Tensor &x, const torch::Tensor &y){
                 TORCH_CHECK(x.device() == y.device(), x, " must have same device as ", y);
             }
 
-            void __inline__ CHECK_INPUT(torch::Tensor x)
-            {
+            void __inline__ CHECK_INPUT(torch::Tensor x){
                 CHECK_CUDA(x);
                 CHECK_CONTIGUOUS(x);
             }
@@ -82,34 +76,24 @@ namespace gorby{
 
             // NOTE: Minimal working size for threads is 32 (warp) see CUDA programming guide for this info
             // No sense in using something smaller than this
-            if (tensor_size_along_dim <= 32)
-            {
+            if (tensor_size_along_dim <= 32){
                 threads_per_block = 32;
             }
-            else if (tensor_size_along_dim <= 64)
-            {
+            else if (tensor_size_along_dim <= 64){
                 threads_per_block = 64;
             }
-            else if (tensor_size_along_dim <= 128)
-            {
+            else if (tensor_size_along_dim <= 128){
                 threads_per_block = 128;
             }
-            else if (tensor_size_along_dim <= 256)
-            {
+            else if (tensor_size_along_dim <= 256){
                 threads_per_block = 256;
             }
-            else if (tensor_size_along_dim <= 512)
-            {
+            else if (tensor_size_along_dim <= 512){
                 threads_per_block = 512;
-            }
-            else if (tensor_size_along_dim <= 1024)
-            {
-                threads_per_block = 1024;
             }
             // Max threads per block is 1024 for most NVIDIA GPU architectures - see CUDA programming guide
             // Lets use 1024 for the maximum size if our length is > 1024 - we will just dispatch more thread blocks then
-            else
-            {
+            else{
                 threads_per_block = 1024;
             }
 
@@ -121,8 +105,7 @@ namespace gorby{
         // Note, we can beautify this and make it simpler by registering our functions with the PyTorch dispatcher (TODO)
         torch::Tensor _gorby_vector_add_1d_inplace(
         torch::Tensor x,
-        torch::Tensor y)
-        {
+        torch::Tensor y){
             // Let's compute this so we can dispatch small thread blocks for smaller tensor sizes (more efficient, less wasted operations)
             const unsigned int threads_per_block = get_threads_per_block_from_tensor_dim(x, 0);
 
@@ -135,8 +118,7 @@ namespace gorby{
             const dim3 blocks(block_x, 1, 1);
 
             // Dispatch based on dtype!
-            if (x.device().type() == torch::kCUDA)
-            {
+            if (x.device().type() == torch::kCUDA){
                 // Lambda function, but the call to the kernel is done via CUDA kernel launch syntax <<<...>>>
                 // NOTE: This assumes floating point data. See ATen/Dispatch.h for other options!
                 AT_DISPATCH_FLOATING_TYPES(x.type(), "gorby_vector_add_1d_inplace_cuda", ([&]
@@ -145,8 +127,7 @@ namespace gorby{
                                                                                                 y.packed_accessor32<scalar_t, 1, torch::RestrictPtrTraits>(),
                                                                                                 (unsigned int)x.size(0)); }));
             }
-            else
-            {
+            else{
                 // NOTE: This assumes floating point data. See ATen/Dispatch.h for other options!
                 AT_DISPATCH_FLOATING_TYPES(x.type(), "gorby_vector_add_1d_inplace_cpu", ([&]
                                                                                         { gorby_vector_add_1d_inplace_cpu_kernel<scalar_t>(
@@ -163,8 +144,7 @@ namespace gorby{
         // Here we call the helper function with a similar name to do the heavy lifting, but first do some input validation
         torch::Tensor gorby_vector_add_1d_inplace(
         torch::Tensor x,
-        torch::Tensor y)
-        {
+        torch::Tensor y){
             // Input Checking! What fun
             CHECK_SAME_TYPE(x, y);
             CHECK_SAME_DEVICE(x, y);

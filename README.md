@@ -2,7 +2,7 @@
 Simple vector add C++/CUDA kernel. Based off of a similar tutorial from PyTorch from https://pytorch.org/tutorials/advanced/cpp_extension.html
 
 ## Installation
-Execute `python setup.py develop` in the `cpp` directory
+Execute `python setup.py develop` in the `ops` directory
 
 ## Usage
 Run `python main_cuda.py -l <some number> -d <cuda|cpu>`
