@@ -13,6 +13,11 @@ setup(
         CUDAExtension(
             name="gorby_nvtx", sources=["gorby_nvtx.cpp"]
         ),
+        CUDAExtension(
+            name="gorby_sdpa", sources=["gorby_sdpa.cu"],
+            include_dirs=['C:\\Users\\neliopou\\Documents\\PhD\\Github\\cutlass\\include']
+        ),
+
     ],
     cmdclass={"build_ext": BuildExtension},
 )
