@@ -6,7 +6,7 @@ namespace gorby{
         // Definitions
         torch::Tensor gorby_sdpa_forward(
             torch::Tensor A, torch::Tensor B, torch::Tensor C
-        );
+        ){ return A; }
 
         // PyBind!
         PYBIND11_MODULE(TORCH_EXTENSION_NAME, m){
