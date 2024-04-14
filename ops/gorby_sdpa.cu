@@ -1,54 +1,86 @@
-// CUTLASS
 #include "gorby_sdpa.cuh"
-#include "cutlass/cutlass.h"
-#include "cutlass/layout/matrix.h"
-#include "cutlass/gemm/device/gemm_array.h"
-#include "cutlass/gemm/device/gemm_batched.h"
-#include "cutlass/detail/helper_macros.hpp"
+#include "cuda_check.hpp"
 
-cudaError_t cutlass_array_sgemm(
-  int m,
-  int n,
-  int k,
-  float alpha,
-  float const * const *A,
-  int lda,
-  float const * const *B,
-  int ldb,
-  float * const *C,
-  int ldc,
-  float beta,
-  int batch_count) {
-  #if (CUTLASS_CXX17_OR_LATER==1)
-  #pragma message ( "gorby_sdpa.cu: C++17 Detected!" )
-  using Gemm = cutlass::gemm::device::GemmArray<
-    float, cutlass::layout::ColumnMajor,
-    float, cutlass::layout::ColumnMajor,
-    float, cutlass::layout::ColumnMajor
-  >;
+#include "cutlass/gemm/device/gemm.h"
 
-  Gemm gemm_op;
+using namespace gorby::utils;
 
-  cutlass::Status status = gemm_op({
-    {m, n, k},
-    A, lda,
-    B, ldb,
-    C, ldc,
-    C, ldc,
-    {alpha, beta},
-    batch_count
-  });
+namespace gorby{
+    namespace sdpa{
+        // CUDA Binding - Simple CUTLASS SGEMM kernel
+		// See https://github.com/NVIDIA/cutlass/issues/282 for example
+        torch::Tensor cutlass_sgemm_nn(
+			torch::Tensor A, 
+			torch::Tensor B, 
+			torch::Tensor C
+		) {
+			// Create output tensor D
+			auto D_options = torch::TensorOptions()
+				.dtype(C.dtype())
+				.layout(C.layout())
+				.device(C.device())
+				.requires_grad(false);
 
-  if (status != cutlass::Status::kSuccess) {
-    return cudaErrorUnknown;
-  }
-  #else
-  #define AUX(x) #x
-  #define STRINGIFY(x) AUX(x)  
-  #pragma message ( "gorby_sdpa.cu: C++17 Not Detected" )
-  #pragma message ( STRINGIFY(__cplusplus) )
-  #pragma message ( STRINGIFY(_MSVC_LANG) )
-  #endif
+			torch::Tensor D = torch::empty_like(C, D_options);
 
-  return cudaSuccess;
+			// Get Tensor Accessors - assert type is float and A,B,C have 2 dimensions
+			auto a = A.packed_accessor64<float, 2>();
+			auto b = B.packed_accessor64<float, 2>();
+			auto c = C.packed_accessor64<float, 2>();
+			auto d = D.packed_accessor64<float, 2>();
+
+			// Let's do the matrix multiplication via CUTLASS
+			// Create GEMM instance
+			using CutlassSGEMM_NNOperator = cutlass::gemm::device::Gemm<
+			float, 
+			cutlass::layout::ColumnMajor,
+			float, 
+			cutlass::layout::ColumnMajor,
+			float, 
+			cutlass::layout::ColumnMajor>;
+
+			CutlassSGEMM_NNOperator cutlass_sgemm_nn_operator_instance;
+
+			// Get Problem Size
+			int M = (int) A.size(0);
+			int N = (int) A.size(1);
+			int K = (int) C.size(1);
+
+			CutlassSGEMM_NNOperator::Arguments args(
+				{M, N, K},
+				{(float*)A.data_ptr(), cutlass::layout::ColumnMajor(a.stride(0))},
+				{(float*)B.data_ptr(), cutlass::layout::ColumnMajor(b.stride(0))},
+				{(float*)C.data_ptr(), cutlass::layout::ColumnMajor(c.stride(0))},
+				{(float*)D.data_ptr(), cutlass::layout::ColumnMajor(d.stride(0))},
+				{1.0f, 1.0f}
+			);
+			
+			// Invoke the CUTLASS GEMM template
+			cutlass::Status status = cutlass_sgemm_nn_operator_instance(args);
+
+			// Return!
+			return D;
+		}
+
+
+        // Definitions
+        torch::Tensor gorby_sdpa_forward(
+        	torch::Tensor A, torch::Tensor B, torch::Tensor C
+        ) {
+			CHECK_CUDA(A);
+			CHECK_CUDA(B);
+			CHECK_CUDA(C);
+			CHECK_CONTIGUOUS(A);
+			CHECK_CONTIGUOUS(B);
+			CHECK_CONTIGUOUS(C);
+			CHECK_SAME_TYPE(A, B);
+			CHECK_SAME_TYPE(B, C);
+			TORCH_CHECK(A.size(1) == B.size(0) && C.size(0) == A.size(0) && C.size(1) == B.size(1));
+
+			torch::Tensor D = cutlass_sgemm_nn(A, B, C);
+
+			TORCH_CHECK(status == cudaSuccess);
+			return D;
+		}
+    }
 }
