@@ -3,6 +3,7 @@
 
 #include <cuda_runtime.h>
 #include <cutlass/gemm/device/gemm.h>
+#include <cutlass/gemm_coord.h>
 
 using namespace gorby::utils;
 
@@ -48,14 +49,56 @@ namespace gorby{
 				float, cutlass::layout::ColumnMajor,
 				float,
 				cutlass::arch::OpClassSimt,
-				cutlass::arch::Sm86
+				cutlass::arch::Sm80
 				// This code section describes the tile size a thread block will compute
-				// cutlass::gemm::GemmShape<128, 128, 1>,
+				// cutlass::gemm::GemmShape<128, 256, 64>
 				// This code section describes tile size a warp will compute
-				// cutlass::gemm::GemmShape<64, 64, 1>,
+				//cutlass::gemm::GemmShape<64, 64, 32>
 				// This code section describes the size of MMA op
 				// cutlass::gemm::GemmShape<32, 32, 1>
 			>;
+
+			// // A matrix configuration
+			// using         ElementA    = cutlass::half_t;                                // Element type for A matrix operand
+			// using         LayoutA     = cutlass::layout::RowMajor;                      // Layout type for A matrix operand
+			// constexpr int AlignmentA  = 128 / cutlass::sizeof_bits<ElementA>::value;    // Memory access granularity/alignment of A matrix in units of elements (up to 16 bytes)
+
+			// // B matrix configuration
+			// using         ElementB    = cutlass::half_t;                                // Element type for B matrix operand
+			// using         LayoutB     = cutlass::layout::RowMajor;                      // Layout type for B matrix operand
+			// constexpr int AlignmentB  = 128 / cutlass::sizeof_bits<ElementB>::value;    // Memory access granularity/alignment of B matrix in units of elements (up to 16 bytes)
+
+			// // C/D matrix configuration
+			// using         ElementC    = cutlass::half_t;                                // Element type for C and D matrix operands
+			// using         LayoutC     = cutlass::layout::RowMajor;                      // Layout type for C and D matrix operands
+			// constexpr int AlignmentC  = 128 / cutlass::sizeof_bits<ElementC>::value;    // Memory access granularity/alignment of C/D matrices in units of elements (up to 16 bytes)
+
+			// // Multiply-accumulate blocking/pipelining details
+			// using ElementAccumulator  = cutlass::half_t;                          // Element type for internal accumulation
+			// using ArchTag             = cutlass::arch::Sm80;                      // Tag indicating the minimum SM that supports the intended feature
+			// using OperatorClass       = cutlass::arch::OpClassTensorOp;           // Operator class tag
+			// using ThreadblockShape    = cutlass::gemm::GemmShape<128, 128, 32>;   // Threadblock-level tile size (concept: GemmShape)
+			// using WarpShape           = cutlass::gemm::GemmShape<64, 64, 32>;     // Warp-level tile size (concept: GemmShape)
+			// using InstructionShape    = cutlass::gemm::GemmShape<16, 8, 16>;      // Instruction-level tile size (concept: GemmShape)
+			// constexpr int NumStages   = 4;                                        // Number of global->shared pipeline stages used in the GEMM mainloop
+
+			// // StreamK device GEMM implementation type
+			// using CutlassSGEMM_NNOperator = cutlass::gemm::device::GemmUniversal<
+			// 	float, cutlass::layout::ColumnMajor,
+			// 	float, cutlass::layout::ColumnMajor,
+			// 	float, cutlass::layout::ColumnMajor,
+			// 	float,
+			// 	cutlass::arch::OpClassTensorOp,
+			// 	cutlass::arch::Sm80,
+			// 	ThreadblockShape,
+			// 	WarpShape,
+			// 	InstructionShape,
+			// 	EpilogueOp,
+			// 	cutlass::gemm::threadblock::ThreadblockSwizzleStreamK, // <-- Only difference
+			// 	NumStages,
+			// 	AlignmentA,
+			// 	AlignmentB
+			// >;
 
 			CutlassSGEMM_NNOperator cutlass_sgemm_nn_operator_instance;
 
