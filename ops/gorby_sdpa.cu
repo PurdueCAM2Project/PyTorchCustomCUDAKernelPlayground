@@ -1,9 +1,20 @@
 #include "gorby_sdpa.cuh"
 #include "cuda_check.hpp"
 
-#include "cutlass/gemm/device/gemm.h"
+#include <cuda_runtime.h>
+#include <cutlass/gemm/device/gemm.h>
 
 using namespace gorby::utils;
+
+#define CUTLASS_CHECK(status)                                                                    \
+	{                                                                                              \
+	cutlass::Status error = status;                                                              \
+	if (error != cutlass::Status::kSuccess) {                                                    \
+		std::cerr << "Got cutlass error: " << cutlassGetStatusString(error) << " at: " << __LINE__ \
+				<< std::endl;                                                                    \
+		exit(EXIT_FAILURE);                                                                        \
+	}                                                                                            \
+}
 
 namespace gorby{
     namespace sdpa{
@@ -32,12 +43,19 @@ namespace gorby{
 			// Let's do the matrix multiplication via CUTLASS
 			// Create GEMM instance
 			using CutlassSGEMM_NNOperator = cutlass::gemm::device::Gemm<
-			float, 
-			cutlass::layout::ColumnMajor,
-			float, 
-			cutlass::layout::ColumnMajor,
-			float, 
-			cutlass::layout::ColumnMajor>;
+				float, cutlass::layout::ColumnMajor,
+				float, cutlass::layout::ColumnMajor,
+				float, cutlass::layout::ColumnMajor,
+				float,
+				cutlass::arch::OpClassSimt,
+				cutlass::arch::Sm86
+				// This code section describes the tile size a thread block will compute
+				// cutlass::gemm::GemmShape<128, 128, 1>,
+				// This code section describes tile size a warp will compute
+				// cutlass::gemm::GemmShape<64, 64, 1>,
+				// This code section describes the size of MMA op
+				// cutlass::gemm::GemmShape<32, 32, 1>
+			>;
 
 			CutlassSGEMM_NNOperator cutlass_sgemm_nn_operator_instance;
 
@@ -57,6 +75,7 @@ namespace gorby{
 			
 			// Invoke the CUTLASS GEMM template
 			cutlass::Status status = cutlass_sgemm_nn_operator_instance(args);
+			CUTLASS_CHECK(status);
 
 			// Return!
 			return D;
@@ -79,7 +98,6 @@ namespace gorby{
 
 			torch::Tensor D = cutlass_sgemm_nn(A, B, C);
 
-			TORCH_CHECK(status == cudaSuccess);
 			return D;
 		}
     }

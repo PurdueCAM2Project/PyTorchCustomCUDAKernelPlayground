@@ -53,6 +53,9 @@ class NativeGEMM(torch.nn.Module):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+    parser.add_argument("--M", type=int, default=128)
+    parser.add_argument("--N", type=int, default=128)
+    parser.add_argument("--K", type=int, default=128)
     parser.add_argument("-d", "--device", type=str, default="cuda")
     args = parser.parse_args()
 
@@ -60,14 +63,14 @@ if __name__ == "__main__":
     device = torch.device(args.device)
 
     ### For fun - start nvtx!
-    nvtx_init()
-    print("Created NVTX context!")
+    # nvtx_init()
+    # print("Created NVTX context!")
     
 	###
 	### SDPA / Matmul Testing
 	###
-    gorby_gemm_module = GorbyGEMM(device=device)
-    native_gemm_module = NativeGEMM(device=device)
+    gorby_gemm_module = GorbyGEMM(args.M, args.N, args.K, device=device)
+    native_gemm_module = NativeGEMM(args.M, args.N, args.K, device=device)
 
     ### Forward
     D_gorby_gemm = gorby_gemm_module()
@@ -82,3 +85,7 @@ if __name__ == "__main__":
     native_ms = benchmark_milliseconds(native_gemm_module)
     gorby_ms = benchmark_milliseconds(gorby_gemm_module)
     print(f"native / gorby median ms: {native_ms:.2f} / {gorby_ms:.2f}")
+
+    percent_diff = (native_ms-gorby_ms) / native_ms * 100.0
+    perecent_diff_string = "higher" if percent_diff < 0 else "lower"
+    print(f"gorby latency is {abs(percent_diff):.2f}% {perecent_diff_string}")
