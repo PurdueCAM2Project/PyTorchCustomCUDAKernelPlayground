@@ -53,7 +53,8 @@ class GorbySoftmax(torch.nn.Module):
         super().__init__()
 
     def forward(self, x : torch.Tensor):
-        return softmax_forward(x)
+        ex = softmax_forward(x)
+        return ex / ex.sum(dim=1)
 
 ###
 ### Native Torch GEMM
@@ -79,7 +80,9 @@ class NativeSoftmax(torch.nn.Module):
         super().__init__()
 
     def forward(self, x : torch.Tensor):
-        return torch.exp(x - x.max())
+        xmax, _ = x.max(dim=1)
+        ex = torch.exp(x - xmax)
+        return ex / ex.sum(dim=1)
 
 ###
 ### SDPA / Matmul Testing
