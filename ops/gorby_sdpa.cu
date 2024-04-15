@@ -131,13 +131,13 @@ namespace gorby{
         	torch::PackedTensorAccessor64<float, 2, torch::RestrictPtrTraits> b,
 			unsigned int M,
 			unsigned int N,
-			float maximum_a
+        	torch::PackedTensorAccessor64<float, 1, torch::RestrictPtrTraits> maximums
 		) {
 			// Get x, y indidces
             const unsigned int x_index = threadIdx.x + (blockIdx.x * blockDim.x);
 			const unsigned int y_index = threadIdx.y + (blockIdx.y * blockDim.y);
 			if(x_index < M && y_index < N) {
-				b[x_index][y_index] = __expf(a[x_index][y_index] - maximum_a);
+				b[x_index][y_index] = expf(a[x_index][y_index] - maximums[x_index]);
 			}
 		}
 
@@ -149,9 +149,9 @@ namespace gorby{
         	torch::PackedTensorAccessor64<float, 2, torch::RestrictPtrTraits> b,
 			unsigned int M,
 			unsigned int N,
-			float maximum_a
+        	torch::PackedTensorAccessor64<float, 1, torch::RestrictPtrTraits> maximums
 		) {
-			_exp_max_subtraction_fp32_matrix_n(a, b, M, N, maximum_a);
+			_exp_max_subtraction_fp32_matrix_n(a, b, M, N, maximums);
 		}
 
 		// Host Binding for Softmax
@@ -169,7 +169,7 @@ namespace gorby{
 			torch::Tensor B = torch::empty_like(A, B_options);
 
 			// Get maximum of A
-			auto maximum_a = torch::max(A);
+			auto [maximums_a, maximum_indices_a] = torch::max(A, 1);
 
 			// Select kernel dimensions
 			unsigned int M = A.size(0);
@@ -201,7 +201,7 @@ namespace gorby{
 				B.packed_accessor64<float, 2, torch::RestrictPtrTraits>(),
 				M,
 				N,
-				maximum_a.item<float>()
+        		maximums_a.packed_accessor64<float, 1, torch::RestrictPtrTraits>()
 			);
 
 			// Return!

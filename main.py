@@ -80,9 +80,15 @@ class NativeSoftmax(torch.nn.Module):
         super().__init__()
 
     def forward(self, x : torch.Tensor):
-        xmax, _ = x.max(dim=1)
-        ex = torch.exp(x - xmax)
-        return ex / ex.sum(dim=1)
+        ex = torch.exp(x - x.max(dim=1)[0])
+        return ex / ex.sum(dim=0)
+    
+class NativeSoftmax2(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x : torch.Tensor):
+        return torch.softmax(x, dim=1)
 
 ###
 ### SDPA / Matmul Testing
@@ -118,28 +124,31 @@ def test_softmax(args : argparse.Namespace):
 
     gorby_softmax_module = GorbySoftmax()
     native_softmax_module = NativeSoftmax()
-
+    native2_softmax_module = NativeSoftmax2()
     print("Softmax Testing")
 
     ### Forward
-    x = torch.ones(size=(args.M, args.N), device=device)
+    x = torch.randn(size=(args.M, args.N), device=device)
     D_gorby_gemm = gorby_softmax_module(x)
     D_native_gemm = native_softmax_module(x)
+    D_native2_gemm = native2_softmax_module(x)
 
     ### Info
     print(f"input: {x}")
     print(f"native / gorby softmax D shapes: {D_native_gemm.shape} / {D_gorby_gemm.shape}")
-    print(f"native softmax D: {D_native_gemm}")
-    print(f"gorby softmax D: {D_gorby_gemm}")
+    print(f"native softmax D:\n{D_native_gemm}")
+    print(f"ref softmax D:\n{D_native2_gemm}")
+    print(f"gorby softmax D:\n{D_gorby_gemm}")
 
     ### Benchmarking
     native_ms = benchmark_milliseconds_forward(x, native_softmax_module)
+    native2_ms = benchmark_milliseconds_forward(x, native2_softmax_module)
     gorby_ms = benchmark_milliseconds_forward(x, gorby_softmax_module)
-    print(f"native / gorby median ms: {native_ms:.2f} / {gorby_ms:.2f}")
+    print(f"native (torch ops) / ref (torch.softmax) / gorby median ms: {native_ms:.2f} / {native2_ms:.2f} / {gorby_ms:.2f}")
 
-    percent_diff = (native_ms-gorby_ms) / native_ms * 100.0
+    percent_diff = (native2_ms-gorby_ms) / native2_ms * 100.0
     perecent_diff_string = "higher" if percent_diff < 0 else "lower"
-    print(f"gorby latency is {abs(percent_diff):.2f}% {perecent_diff_string}")
+    print(f"gorby latency is {abs(percent_diff):.2f}% {perecent_diff_string} than torch.softmax")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -151,10 +160,6 @@ if __name__ == "__main__":
 
     ### Create Device
     device = torch.device(args.device)
-
-    ### For fun - start nvtx!
-    # nvtx_init()
-    # print("Created NVTX context!")
 
     ### Testing
     # test_gemm(args)
