@@ -22,5 +22,17 @@ namespace gorby{
         void __inline__ CHECK_SAME_DEVICE(const torch::Tensor &x, const torch::Tensor &y){
             TORCH_CHECK(x.device() == y.device(), x, " must have same device as ", y);
         }
+
+        void __inline__ CHECK_NONZERO_DIM(const torch::Tensor &x, int dim){
+            TORCH_CHECK(x.size(dim) > 0, x, " must have nonzero size along dim", dim);
+        }
+
+        void __inline__ CHECK_MATRIX_SHAPE(const torch::Tensor &x){
+            TORCH_CHECK(x.sizes().size() == 2, x, " must have exactly two dimensions");
+        }
+
+        void __inline__ CHECK_VECTOR_SHAPE(const torch::Tensor &x){
+            TORCH_CHECK(x.sizes().size() == 1, x, " must have exactly one dimension");
+        }
     }
 }

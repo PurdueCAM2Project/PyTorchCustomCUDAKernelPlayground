@@ -1,6 +1,7 @@
 #include "gorby_sdpa.cuh"
 #include "cuda_check.hpp"
 
+#include <algorithm>
 #include <cuda_runtime.h>
 #include <cutlass/gemm/device/gemm.h>
 #include <cutlass/gemm_coord.h>
@@ -124,11 +125,96 @@ namespace gorby{
 			return D;
 		}
 
+		// Softmax Sum and reduction
+		__device__ __inline__ void _exp_max_subtraction_fp32_matrix_n(
+        	torch::PackedTensorAccessor64<float, 2, torch::RestrictPtrTraits> a,
+        	torch::PackedTensorAccessor64<float, 2, torch::RestrictPtrTraits> b,
+			unsigned int M,
+			unsigned int N,
+			float maximum_a
+		) {
+			// Get x, y indidces
+            const unsigned int x_index = threadIdx.x + (blockIdx.x * blockDim.x);
+			const unsigned int y_index = threadIdx.y + (blockIdx.y * blockDim.y);
+			if(x_index < M && y_index < N) {
+				b[x_index][y_index] = __expf(a[x_index][y_index] - maximum_a);
+			}
+		}
+
+		// Device Binding for single precision (FP32) softmax with 2D Matrix (M, N) as input - reduction performed along N (columns) dimension
+		// MxN matrix "a" input
+		// MxN matrix "b" output
+		__global__ void softmax_fp32_matrix_n_kernel(
+        	torch::PackedTensorAccessor64<float, 2, torch::RestrictPtrTraits> a,
+        	torch::PackedTensorAccessor64<float, 2, torch::RestrictPtrTraits> b,
+			unsigned int M,
+			unsigned int N,
+			float maximum_a
+		) {
+			_exp_max_subtraction_fp32_matrix_n(a, b, M, N, maximum_a);
+		}
+
+		// Host Binding for Softmax
+		torch::Tensor softmax_matrix_n(
+			torch::Tensor A
+		) {
+			// Create output tensor B
+			auto B_options = torch::TensorOptions()
+				.dtype(A.dtype())
+				.layout(A.layout())
+				.device(A.device())
+				.requires_grad(false);
+
+			// Initialize
+			torch::Tensor B = torch::empty_like(A, B_options);
+
+			// Get maximum of A
+			auto maximum_a = torch::max(A);
+
+			// Select kernel dimensions
+			unsigned int M = A.size(0);
+			unsigned int N = A.size(1);
+
+			// Threads per block = 32 * 32 * 1 = 1024
+            const dim3 threadBlockDimension(32, 32, 1);
+			const unsigned int gridDimX = (M+32-1) / 32;
+			const unsigned int gridDimY = (N+32-1) / 32;
+            const dim3 gridDimension(gridDimX, gridDimY, 1);
+
+			// Launch kernel
+			// AT_DISPATCH_FLOATING_TYPES(
+			// 	A.type(), 
+			// 	"softmax_fp32_matrix_n_kernel", ([&]{ 
+			// 		softmax_fp32_matrix_n_kernel<scalar_t><<<gridDimension, threadBlockDimension>>>(
+			// 			A.packed_accessor64<scalar_t, 2, torch::RestrictPtrTraits>(), 
+			// 			B.packed_accessor64<scalar_t, 2, torch::RestrictPtrTraits>(),
+			// 			M,
+			// 			N,
+			// 			maximum_a
+			// 		);
+			// 	}
+			// ));
+
+			// Launch Kernel - not AT_DISPATCH wrapper
+			softmax_fp32_matrix_n_kernel<<<gridDimension, threadBlockDimension>>>(
+				A.packed_accessor64<float, 2, torch::RestrictPtrTraits>(), 
+				B.packed_accessor64<float, 2, torch::RestrictPtrTraits>(),
+				M,
+				N,
+				maximum_a.item<float>()
+			);
+
+			// Return!
+			return B;
+		}
 
         // Definitions
         torch::Tensor gorby_sdpa_forward(
         	torch::Tensor A, torch::Tensor B, torch::Tensor C
         ) {
+			CHECK_MATRIX_SHAPE(A);
+			CHECK_MATRIX_SHAPE(B);
+			CHECK_MATRIX_SHAPE(C);
 			CHECK_CUDA(A);
 			CHECK_CUDA(B);
 			CHECK_CUDA(C);
@@ -138,10 +224,30 @@ namespace gorby{
 			CHECK_SAME_TYPE(A, B);
 			CHECK_SAME_TYPE(B, C);
 			TORCH_CHECK(A.size(1) == B.size(0) && C.size(0) == A.size(0) && C.size(1) == B.size(1));
+			CHECK_NONZERO_DIM(A, 0);
+			CHECK_NONZERO_DIM(A, 1);
+			CHECK_NONZERO_DIM(B, 0);
+			CHECK_NONZERO_DIM(B, 1);
+			CHECK_NONZERO_DIM(C, 0);
+			CHECK_NONZERO_DIM(C, 1);
 
 			torch::Tensor D = cutlass_sgemm_nn(A, B, C);
 
 			return D;
+		}
+
+        torch::Tensor gorby_softmax_forward(
+			torch::Tensor A
+        ) {
+			CHECK_MATRIX_SHAPE(A);
+			CHECK_CUDA(A);
+			CHECK_CONTIGUOUS(A);
+			CHECK_NONZERO_DIM(A, 0);
+			CHECK_NONZERO_DIM(A, 1);
+
+			torch::Tensor B = softmax_matrix_n(A);
+			
+			return B;
 		}
     }
 }
