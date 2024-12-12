@@ -134,10 +134,13 @@ namespace gorby{
         	torch::PackedTensorAccessor64<float, 1, torch::RestrictPtrTraits> maximums
 		) {
 			// Get x, y indidces
+			// Interesting 
             const unsigned int x_index = threadIdx.x + (blockIdx.x * blockDim.x);
 			const unsigned int y_index = threadIdx.y + (blockIdx.y * blockDim.y);
 			if(x_index < M && y_index < N) {
-				b[x_index][y_index] = expf(a[x_index][y_index] - maximums[x_index]);
+				// Testing! Use this for numerical stability
+				// b[x_index][y_index] = expf(a[x_index][y_index] - maximums[x_index]);
+				b[y_index][x_index] = __expf(a[y_index][x_index]);
 			}
 		}
 
